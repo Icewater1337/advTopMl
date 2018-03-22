@@ -2,6 +2,7 @@
 import torch
 import torchvision.datasets as dsets
 import torchvision.transforms as transforms
+from torch.autograd import Variable
 from math import log10
 
 # Hyper Parameters
@@ -18,7 +19,8 @@ def relu(x):
     return x
 
 
-def reulGrad(x):
+# Train the Model
+def reluGrad(x):
     x[x < 0] = 0
     x[x >= 0] = 1
     return x
@@ -44,10 +46,9 @@ test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
                                           shuffle=False)
 
 # initialize your parameters
-W1 = torch.Tensor(input_size, hidden_size)
-W2 = torch.Tensor(hidden_size, input_size)
+W1 = torch.randn(input_size, hidden_size).type(torch.FloatTensor)
+W2 = torch.randn(hidden_size, input_size).type(torch.FloatTensor)
 
-# Train the Model
 for epoch in range(num_epochs):
     for i, (images, _,) in enumerate(train_loader):
         # Grad für jedes img berechnen. Dann aufsumieren udn avg.
@@ -56,14 +57,23 @@ for epoch in range(num_epochs):
         images = images.view(-1, 28 * 28)
         targets = images.clone()
         # forward
-        x1 = relu(torch.mm(images, W1))
+        x1 = relu(torch.mm(targets, W1))
         x2 = torch.mm(x1, W2)
 
         # loss calculation
-        loss = torch.dot((x2 - images).view(-1), (x2 - images).view(-1))
+        loss = (x2 - targets).pow(2).sum()
         # gradient calculation and update parameters
-        gradW1 = torch.dot((2 * (x2 - images)).view(-1), images.view(-1)) * torch.mm(x1, W2)
-        gradW2 = torch.dot((2 * (x2 - images)).view(-1), x1)
+        # 2(x^-x)*x * non'(x*w1)*w2
+        # 2(x^-x)*non(x*w1)
+        gradW1 = torch.mm(torch.transpose(((2 * (x2 - targets)).sum() * targets), -2, 1),
+                          torch.mm(reluGrad(torch.mm(targets, W1)), W2))
+        gradW1Sum = torch.sum(gradW1) / batch_size
+
+        gradW2 = (2 * (x2 - targets)).sum() * x1
+        gradW2Sum = torch.sum(gradW2) / batch_size
+
+        W1 = W1- learning_rate * gradW1Sum
+        W2 = W2 - learning_rate * gradW2Sum
 
         # check your loss
         if (i + 1) % 1 == 0:
