@@ -18,15 +18,15 @@ def relu(x):
     x[x < 0] = 0
     return x
 
-
-# Train the Model
 def reluGrad(x):
     x[x < 0] = 0
     x[x >= 0] = 1
     return x
 
 
-# MNIST Dataset 
+# Train the Model
+
+# MNIST Dataset
 train_dataset = dsets.MNIST(root='./data',
                             train=True,
                             transform=transforms.ToTensor(),
@@ -57,23 +57,21 @@ for epoch in range(num_epochs):
         images = images.view(-1, 28 * 28)
         targets = images.clone()
         # forward
-        x1 = relu(torch.mm(targets, W1))
-        x2 = torch.mm(x1, W2)
+        xw1 = torch.mm(targets,W1)
+        model = torch.mm(relu(xw1), W2)
 
         # loss calculation
-        loss = (x2 - targets).pow(2).sum()
+        loss = (model - targets).pow(2).sum()
         # gradient calculation and update parameters
-        # 2(x^-x)*x * non'(x*w1)*w2
-        # 2(x^-x)*non(x*w1)
-        gradW1 = torch.mm(torch.transpose(((2 * (x2 - targets)).sum() * targets), -2, 1),
-                          torch.mm(reluGrad(torch.mm(targets, W1)), W2))
-        gradW1Sum = torch.sum(gradW1) / batch_size
+        # grad w1 = x^t * 2(x^-x) * w2^t (*) non'(x*w1)
+        gradW1 = torch.mm(torch.t(images), torch.mul(torch.mm((2 * (model - targets)), torch.t(W2)), reluGrad(xw1)))
 
-        gradW2 = (2 * (x2 - targets)).sum() * x1
-        gradW2Sum = torch.sum(gradW2) / batch_size
+        # grad w2 = non(x*w1)^t * 2(x^-x)
+        gradW2 = torch.mm(torch.t(xw1),(2 *(images - model)))
 
-        W1 = W1- learning_rate * gradW1Sum
-        W2 = W2 - learning_rate * gradW2Sum
+        #Update weights.
+        W1 = W1 - learning_rate * gradW1
+        W2 = W2 - learning_rate * gradW2
 
         # check your loss
         if (i + 1) % 1 == 0:
@@ -86,9 +84,9 @@ for (images, epoch,) in test_loader:
     images = images.view(-1, 28 * 28)
     targets = images.clone()
     # get your predictions
-    # predictions =
+    predictions = torch.mm(relu(torch.mm(images,W1)),W2)
     # calculate PSNR
-    # mse = torch.mean((predictions - targets).pow(2))
-    # psnr = 10 * log10(1 / mse)
-# avg_psnr += psnr
+    mse = torch.mean((predictions - targets).pow(2))
+    psnr = 10 * log10(1 / mse)
+    avg_psnr += psnr
 print("===> Avg. PSNR: {:.4f} dB".format(avg_psnr / len(test_loader)))
